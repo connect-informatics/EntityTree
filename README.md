@@ -1,4 +1,11 @@
 # EntityTree
+
+Questa App è disponibile al link:
+
+[https://connect-informatics.github.io/EntityTree/](https://connect-informatics.github.io/EntityTree/)
+
+#
+
 Per eseguire l'applicazione in modalità di sviluppo eseguire i seguenti passaggi:
 
 1. Clonare questo repository in locale:
