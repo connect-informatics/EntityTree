@@ -11,10 +11,11 @@ import Typography from '@mui/material/Typography';
 import Tooltip from '@mui/material/Tooltip';
 import Snackbar from '@mui/material/Snackbar';
 import Alert from '@mui/material/Alert';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 
 const useStyles = makeStyles((theme) => ({
   button: {
-    marginTop: '15px',
     alignSelf: 'center', // Assicurati che i pulsanti siano allineati verticalmente al centro
   },
   root: {
@@ -271,39 +272,79 @@ const Tree = () => {
   const [snackbarMessage, setSnackbarMessage] = React.useState('');
   const treeRef = useRef(null);
   const [filterText, setFilterText] = useState('');
+  const [searchValue, setSearchValue] = useState(null);
 
+  const filterTree = useCallback((nodes, filterText) => {
+    if (!filterText) return nodes;
+
+    const filteredNodes = [];
+
+    const filterRecursive = (node, parentPath = []) => {
+      const newNode = { ...node, children: [] };
+      let match = node.title.toLowerCase().includes(filterText.toLowerCase());
+
+      if (node.children) {
+        for (const child of node.children) {
+          const filteredChild = filterRecursive(child, [...parentPath, newNode]);
+          if (filteredChild) {
+            newNode.children.push(filteredChild);
+            match = true;
+          }
+        }
+      }
+
+      if (match) {
+        return newNode;
+      }
+      return null;
+    };
+
+    for (const node of nodes) {
+      const filteredNode = filterRecursive(node);
+      if (filteredNode) {
+        filteredNodes.push(filteredNode);
+      }
+    }
+
+    return filteredNodes;
+  }, []);
+
+  // Aggiorna l'albero filtrato ogni volta che cambia il testo di ricerca o l'albero completo
   useEffect(() => {
     setFilteredTreeData(filterTree(treeData, filterText));
-  }, [treeData, filterText]);
+  }, [treeData, filterText, filterTree]);
 
   const handleTreeChange = (newTreeData) => {
     setTreeData(newTreeData);
   };
 
+  const handleVisibilityToggle = ({ node, expanded }) => {
+    console.log(`Nodo ${node.title} è stato ${expanded ? 'espanso' : 'compresso'}`);
+  };
+
   useEffect(() => {
-    // Popola le opzioni di ricerca con i titoli dei nodi
-    const options = treeData.map(node => ({ title: node.title, id: node.id }));
+    const options = [];
+    const generateOptions = (nodes, path = []) => {
+      for (let i = 0; i < nodes.length; i++) {
+        const newPath = path.concat(i);
+        options.push({ title: nodes[i].title, id: nodes[i].id, path: newPath });
+        if (nodes[i].children) {
+          generateOptions(nodes[i].children, newPath);
+        }
+      }
+    };
+    generateOptions(filteredTreeData);
     setSearchOptions(options);
-  }, [treeData]);
-
-
-  useEffect(() => {
-    if (treeContainerRef.current) {
-      // Qui puoi accedere a treeContainerRef.current per manipolare l'elemento del DOM
-    }
-  }, []);
-
+  }, [filterText, filteredTreeData]);
 
   const handleFileUpload = (event) => {
     const file = event.target.files[0];
     if (!file) {
-      // L'utente ha premuto "Annulla", esci dalla funzione
       return;
     }
     const reader = new FileReader();
     reader.onload = (event) => {
       const data = JSON.parse(event.target.result);
-      // Assicurati che i dati contengano tutte le informazioni necessarie, inclusi i nodi figli
       let transformedData = transformData(data);
       setTreeData(transformedData);
     };
@@ -314,7 +355,7 @@ const Tree = () => {
     const userName = prompt('Inserisci il tuo nome utente:');
     const now = new Date();
     const year = now.getFullYear();
-    const month = String(now.getMonth() + 1).padStart(2, '0'); // Mesi da 0 a 11
+    const month = String(now.getMonth() + 1).padStart(2, '0');
     const day = String(now.getDate()).padStart(2, '0');
     const hours = String(now.getHours()).padStart(2, '0');
     const minutes = String(now.getMinutes()).padStart(2, '0');
@@ -379,6 +420,8 @@ const Tree = () => {
 
   // Aggiungi questa funzione nel componente React che gestisce l'albero
   function handleColorButtonClick(nodeId, strongColor) {
+
+
     const weakColor = strongColor === 'goldenrod' ? 'palegoldenrod' : 'lightgreen';
     const strongColors = ['goldenrod', 'green', 'blue']; // Colori che non devono essere sovrascritti
 
@@ -419,8 +462,15 @@ const Tree = () => {
         } else {
           applyWeakColorToChildren(rootNode, weakColor, strongColors);
         }
+
+        // Espandi tutti gli antenati del nodo cliccato
+        expandPathNodes(nodeId);
+
         // Aggiorna lo stato dell'albero per riflettere i cambiamenti
         setTreeData([...treeData]);
+
+        // Espandi tutti gli antenati del nodo cliccato
+        expandPathNodes(nodeId);
       }
     }
   }
@@ -594,22 +644,6 @@ const Tree = () => {
     }
   };
 
-  useEffect(() => {
-    const options = [];
-    const generateOptions = (nodes, path = []) => {
-      for (let i = 0; i < nodes.length; i++) {
-        const newPath = path.concat(i);
-        // Includi l'id nella creazione delle opzioni
-        options.push({ title: nodes[i].title, id: nodes[i].id, path: newPath });
-        if (nodes[i].children) {
-          generateOptions(nodes[i].children, newPath);
-        }
-      }
-    };
-    generateOptions(filteredTreeData);
-    setSearchOptions(options);
-  }, [treeData, filterText, filteredTreeData]);
-
   const handleFilterTextChange = (event) => {
     setFilterText(event.target.value);
     if (!event.target.value || event.target.value === '') {
@@ -617,19 +651,83 @@ const Tree = () => {
     }
   };
 
+  const HandleCloseAllNodesFiltered = useCallback(() => {
+    const closeNodes = (nodes) => {
+      return nodes.map(node => ({
+        ...node,
+        expanded: false,
+        children: node.children ? closeNodes(node.children) : [],
+      }));
+    };
+    setFilteredTreeData(closeNodes(filteredTreeData));
+  }, [filteredTreeData]);
+
   const HandleCloseAllNodes = useCallback(() => {
-    const closeAllNodes = (node) => ({
-      ...node,
-      expanded: false,
-      children: node.children ? node.children.map(closeAllNodes) : [],
-    });
-    const newTreeData = treeData.map(closeAllNodes);
-    setTreeData(newTreeData);
+    const closeNodes = (nodes) => {
+      return nodes.map(node => ({
+        ...node,
+        expanded: false,
+        children: node.children ? closeNodes(node.children) : [],
+      }));
+    };
+    setTreeData(closeNodes(treeData));
   }, [treeData]);
 
-  // Funzione migliorata per espandere i nodi lungo un percorso
+  const handleCloseAllNodesClick = () => {
+    HandleCloseAllNodesFiltered();
+    HandleCloseAllNodes();
+  };
+
+  const handleNodeExpand = (nodeId) => {
+    const expandNode = (nodes, id) => {
+      return nodes.map(node => {
+        if (node.id === id) {
+          return {
+            ...node,
+            expanded: true,
+          };
+        }
+        if (node.children) {
+          return {
+            ...node,
+            children: expandNode(node.children, id),
+          };
+        }
+        return node;
+      });
+    };
+  
+    setTreeData(expandNode(treeData, nodeId));
+  };
+
+  const handleNodeClose = (nodeId) => {
+    const expandNode = (nodes, id) => {
+      return nodes.map(node => {
+        if (node.id === id) {
+          return {
+            ...node,
+            expanded: false,
+          };
+        }
+        if (node.children) {
+          return {
+            ...node,
+            children: expandNode(node.children, id),
+          };
+        }
+        return node;
+      });
+    };
+  
+    setTreeData(expandNode(treeData, nodeId));
+  };
+
   const expandPathNodes = useCallback((treeData, path) => {
     const expandNodes = (nodes, currentPath) => {
+      if (!Array.isArray(nodes)) {
+        return []; // Inizializza nodes come array vuoto se non è un array
+      }
+  
       return nodes.map((node, index) => {
         const newPath = currentPath.concat(index);
         if (path.length > newPath.length && path[newPath.length - 1] === index) {
@@ -670,10 +768,10 @@ const Tree = () => {
   }, []);
 
   const handleSearchChange = useCallback((event, value) => {
+    setSearchValue(value);
+    HandleCloseAllNodesFiltered();
     HandleCloseAllNodes();
-
     setTimeout(() => {
-
       if (value === null) {
         setHighlightedNodeId(null);
       } else {
@@ -682,18 +780,17 @@ const Tree = () => {
         if (value.path) {
           const newTreeData = expandPathNodes(treeData, value.path);
           setTreeData(newTreeData);
-
           setTimeout(() => {
             scrollToNode(value.id);
-          }, 100); // Attendi che l'albero si espanda prima di scorrere al nodo
+          }, 100);
         }
       }
     }, 100);
-  }, [treeData, HandleCloseAllNodes, expandPathNodes, scrollToNode]);
+  }, [treeData, expandPathNodes, scrollToNode, HandleCloseAllNodesFiltered, HandleCloseAllNodes]);
 
 
   // Gestire l'evento di click sulla foreign key
-  const handleForeignKeyClick = (node, nodeId, foreignParentId) => {
+  const handleForeignKeyClick = (nodeId, foreignParentId) => {
     console.log(`Nodo: ${nodeId}, Nodo genitore: ${foreignParentId}`);
     const targetNodePath = findNodePathById(treeData, foreignParentId);
     if (!targetNodePath) {
@@ -854,49 +951,19 @@ const Tree = () => {
     });
   };
 
-  // Funzione per filtrare l'albero
-  const filterTree = (nodes, filterText) => {
-    const filteredNodes = [];
-
-    const filterRecursive = (node, parentPath = []) => {
-      const newNode = { ...node, children: [] };
-      let match = node.title.toLowerCase().includes(filterText.toLowerCase());
-
-      if (node.children) {
-        for (const child of node.children) {
-          const filteredChild = filterRecursive(child, [...parentPath, newNode]);
-          if (filteredChild) {
-            newNode.children.push(filteredChild);
-            match = true;
-          }
-        }
-      }
-
-      if (match) {
-        return newNode;
-      }
-      return null;
-    };
-
-    for (const node of nodes) {
-      const filteredNode = filterRecursive(node);
-      if (filteredNode) {
-        filteredNodes.push(filteredNode);
-      }
-    }
-
-    return filteredNodes;
-  };
-
-  // Aggiorna l'albero filtrato ogni volta che cambia il testo di ricerca o l'albero completo
-  useEffect(() => {
-    setFilteredTreeData(filterTree(treeData, filterText));
-  }, [treeData, filterText]);
-
-
 
   return (
     <div ref={treeRef} className={classes.root} >
+      <style>
+        {`
+          .rst__expandButton {
+            display: none !important;
+          }
+          .rst__collapseButton {
+            display: none !important;
+          }
+        `}
+      </style>
       <div className={classes.buttonGroup} >
         <div className={classes.header}>                  
             {/* Upload e Export JSON qui */}
@@ -932,6 +999,7 @@ const Tree = () => {
                 options={searchOptions}
                 getOptionLabel={(option) => option.title}
                 className={classes.searchBar}
+                value={searchValue}
                 onChange={handleSearchChange}
                 renderInput={(params) => 
                   <TextField
@@ -939,7 +1007,6 @@ const Tree = () => {
                   label="Cerca nodi"
                   variant="outlined" 
                   />}
-                //getOptionSelected={(option, value) => option.id === value.id}
                 style={{ display: 'flex', justifyContent: 'center' }}
               />
             </div>
@@ -947,7 +1014,7 @@ const Tree = () => {
             <Button variant="contained" color="secondary" className={classes.button} onClick={handleRemoveAllColors}>
               Remove All Colors
             </Button>
-            <Button variant="contained" color="secondary" className={classes.button} onClick={HandleCloseAllNodes}>
+            <Button variant="contained" color="secondary" className={classes.button} onClick={handleCloseAllNodesClick}>
               Close All Nodes
             </Button>
         </div>
@@ -962,6 +1029,7 @@ const Tree = () => {
           isVirtualized={false}
           treeData={filteredTreeData}
           onChange={handleTreeChange}
+          onVisibilityToggle={handleVisibilityToggle}
           canDrag={false}
           generateNodeProps={({ node, path }) => ({
             'data-node-id': node.id, // Aggiungi un attributo data per identificare il nodo
@@ -975,16 +1043,43 @@ const Tree = () => {
                 display: 'flex',
                 alignItems: 'center',
               }}>
-                {/* Aggiunta del numero di discendenti con colore condizionale */}
-                <IconButton style={{ padding: 0 }} onClick={(event) => { event.stopPropagation(); handleColorButtonClick(node.id, 'blue'); }}>
-                  <LensIcon style={{ color: 'blue' }} />
-                </IconButton>
-                <IconButton style={{ padding: 0 }} onClick={(event) => { event.stopPropagation(); handleColorButtonClick(node.id, 'goldenrod'); }}>
-                  <LensIcon style={{ color: 'goldenrod' }} />
-                </IconButton>
-                <IconButton style={{ padding: 0 }} onClick={(event) => { event.stopPropagation(); handleColorButtonClick(node.id, 'green'); }}>
-                  <LensIcon style={{ color: 'green' }} />
-                </IconButton>
+                  {node.children && node.children.length > 0 && (
+                    <IconButton
+                      onClick={(event) => {
+                        //se il nodo è espanso, chiudi il nodo, altrimenti espandilo
+                        if (node.expanded) {
+                          event.stopPropagation();
+                          handleNodeClose(node.id);
+                        } else {
+                          event.stopPropagation();
+                          handleNodeExpand(node.id);
+                        }
+                      }}
+                      style={{
+                        backgroundColor: 'white',
+                        borderRadius: '50%',
+                        border: '2px solid #858585',
+                        padding: '1px',
+                        boxShadow: '0px 1px 0px rgba(0,0,0,0.2)',
+                        left: '-48px',
+                      }}
+                    >
+                      {node.expanded ? (
+                        <ExpandMoreIcon style={{ color: 'gray' }} />
+                      ) : (
+                        <ChevronRightIcon style={{ color: 'gray' }} />
+                      )}
+                    </IconButton>
+                  )}
+                  <IconButton style={{ padding: 0 }} onClick={(event) => { event.stopPropagation(); handleColorButtonClick(node.id, 'blue'); }}>
+                    <LensIcon style={{ color: 'blue' }} />
+                  </IconButton>
+                  <IconButton style={{ padding: 0 }} onClick={(event) => { event.stopPropagation(); handleColorButtonClick(node.id, 'goldenrod'); }}>
+                    <LensIcon style={{ color: 'goldenrod' }} />
+                  </IconButton>
+                  <IconButton style={{ padding: 0 }} onClick={(event) => { event.stopPropagation(); handleColorButtonClick(node.id, 'green'); }}>
+                    <LensIcon style={{ color: 'green' }} />
+                  </IconButton>
                 <span style={{
                   fontWeight: 'bold',
                   marginRight: '15px',
@@ -1008,7 +1103,7 @@ const Tree = () => {
                     <Tooltip title={`Nullable: ${fk.isNullable ? 'Yes' : 'No'}`} key={index} classes={{ tooltip: classes.customTooltip }}>
                       <Button
                         key={index}
-                        onClick={(event) => { event.stopPropagation(); handleForeignKeyClick(node, node.id, fk.parentId); }}
+                        onClick={(event) => { event.stopPropagation(); handleForeignKeyClick(node.id, fk.parentId); }}
                         variant="contained"
                         color="default"
                         style={{
