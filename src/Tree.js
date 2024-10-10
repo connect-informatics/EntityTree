@@ -5,6 +5,7 @@ import SortableTree from '@nosferatu500/react-sortable-tree';
 import 'react-sortable-tree/style.css';
 import Button from '@mui/material/Button';
 import IconButton from '@mui/material/IconButton';
+import InputAdornment from '@mui/material/InputAdornment';
 import LensIcon from '@mui/icons-material/Lens';
 import { makeStyles } from '@mui/styles';
 import Typography from '@mui/material/Typography';
@@ -13,6 +14,9 @@ import Snackbar from '@mui/material/Snackbar';
 import Alert from '@mui/material/Alert';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
+import MenuItem from '@mui/material/MenuItem';
+import DeleteIcon from '@material-ui/icons/Delete';
+
 
 const useStyles = makeStyles((theme) => ({
   button: {
@@ -130,6 +134,19 @@ const useStyles = makeStyles((theme) => ({
   customTooltip: {
     backgroundColor: 'lightgrey',
     color: 'black',
+  },
+  filterHistory: {
+    position: 'absolute',
+    backgroundColor: 'white',
+    boxShadow: '0px 4px 8px rgba(0,0,0,0.1)',
+    zIndex: 1000,
+    width: '100%',
+    maxHeight: '200px',
+    overflowY: 'auto',
+    display: 'none', // Nascondi per default
+  },
+  filterHistoryVisible: {
+    display: 'block', // Mostra quando ha il focus
   },
 }));
 
@@ -273,6 +290,8 @@ const Tree = () => {
   const treeRef = useRef(null);
   const [filterText, setFilterText] = useState('');
   const [searchValue, setSearchValue] = useState(null);
+  const [filterHistory, setFilterHistory] = useState([]);
+  const [isTextFieldFocused, setIsTextFieldFocused] = useState(false);
 
   const filterTree = useCallback((nodes, filterText) => {
     if (!filterText) return nodes;
@@ -308,6 +327,61 @@ const Tree = () => {
 
     return filteredNodes;
   }, []);
+
+  function highlightText(text, filter) {
+    const parts = text.split(new RegExp(`(${filter})`, 'gi'));
+    return (
+      <span>
+        {parts.map((part, index) =>
+          part.toLowerCase() === filter.toLowerCase() ? (
+            <span key={index} style={{ backgroundColor: '#3DFF3D' }}>{part}</span>
+          ) : (
+            part
+          )
+        )}
+      </span>
+    );
+  }
+
+  const handleFilterFocus = () => {
+    setIsTextFieldFocused(true);
+  };
+
+  const handleFilterBlur = () => {
+    if (filterText && filterText.trim() !== '' && !filterHistory.includes(filterText)) {
+      setFilterHistory(prevHistory => [...prevHistory, filterText]);
+    }
+    setIsTextFieldFocused(false);
+  };
+
+  // Componente per visualizzare lo storico dei filtri come una tendina
+  const FilterHistoryDropdown = ({ history, onSelect, onRemove, isVisible }) => {
+    const classes = useStyles();
+    return (
+      <div className={`${classes.filterHistory} ${isVisible ? classes.filterHistoryVisible : ''}`}>
+        {history.map((filter, index) => (
+          <MenuItem 
+            key={index}
+            onMouseDown={(e) => e.preventDefault()} // Impedisci la perdita del focus
+            onClick={() => onSelect(filter)}
+          >
+            <span>{filter}</span>
+            <IconButton
+            size="small"
+            onMouseDown={(e) => e.preventDefault()} // Impedisci la perdita del focus
+            onClick={(e) => {
+              e.stopPropagation(); // Impedisci la selezione del filtro
+              onRemove(index);
+            }}
+            style={{ marginLeft: 'auto' }}
+            >
+              <DeleteIcon fontSize="small"/>
+            </IconButton>
+          </MenuItem>
+        ))}
+      </div>
+    );
+  };
 
   // Aggiorna l'albero filtrato ogni volta che cambia il testo di ricerca o l'albero completo
   useEffect(() => {
@@ -422,7 +496,7 @@ const Tree = () => {
   function handleColorButtonClick(nodeId, strongColor) {
 
 
-    const weakColor = strongColor === 'goldenrod' ? 'palegoldenrod' : 'lightgreen';
+    const weakColor = strongColor === 'goldenrod' ? 'palegoldenrod' : '#99D79E';
     const strongColors = ['goldenrod', 'green', 'blue']; // Colori che non devono essere sovrascritti
 
     // Trova il nodo corrispondente all'ID e applica il colore debole ai suoi figli
@@ -595,11 +669,11 @@ const Tree = () => {
   function determineSecondaryColor(nodeId) {
     const parentNode = findParentNodeById(treeData, nodeId);
     const strongColors = ['goldenrod', 'green']; // Colori forti
-    const weakColors = ['palegoldenrod', 'lightgreen'];
+    const weakColors = ['palegoldenrod', '#99D79E'];
 
     const weakColorMapping = { // Mappatura da colore forte a colore debole
       'goldenrod': 'palegoldenrod',
-      'green': 'lightgreen'
+      'green': '#99D79E'
     };
 
     if (parentNode.color !== 'blue' || parentNode.color !== 'lightblue') {
@@ -649,6 +723,19 @@ const Tree = () => {
     if (!event.target.value || event.target.value === '') {
       setFilteredTreeData(treeData);
     }
+  };
+
+  const handleFilterSelect = (filter) => {
+    setFilterText(filter);
+    setIsTextFieldFocused(true); // Mantieni il focus sul campo di testo
+  };
+
+  const handleFilterRemove = (index) => {
+    setFilterHistory((prevHistory) => prevHistory.filter((_, i) => i !== index));
+  };
+
+  const handleClearHistory = () => {
+    setFilterHistory([]);
   };
 
   const HandleCloseAllNodesFiltered = useCallback(() => {
@@ -986,13 +1073,32 @@ const Tree = () => {
               EntityTree
             </Typography>
             <Legend />
-            <TextField
-              variant="outlined"
-              label="Filtra nodi"
-              value={filterText}
-              onChange={handleFilterTextChange}
-              className={classes.searchBar}
-            />
+            <div style={{ position: 'relative' }}>
+              <TextField
+                variant="outlined"
+                label="Filtra nodi"
+                value={filterText}
+                onChange={handleFilterTextChange}
+                onFocus={handleFilterFocus}
+                onBlur={handleFilterBlur}
+                className={classes.searchBar}
+                slotProps={{
+                  endAdornment: (
+                    <InputAdornment position="end">
+                      <IconButton onClick={handleClearHistory}>
+                        <DeleteIcon />
+                      </IconButton>
+                    </InputAdornment>
+                  ),
+                }}
+              />
+              <FilterHistoryDropdown
+                history={filterHistory}
+                onSelect={handleFilterSelect}
+                onRemove={handleFilterRemove}
+                isVisible={isTextFieldFocused}
+              />
+            </div>
             <div style={{ display: 'flex', justifyContent: 'center' }}>
               {/* Box di ricerca qui */}
               <Autocomplete
@@ -1095,7 +1201,7 @@ const Tree = () => {
                   color: ['blue', 'green', 'goldenrod'].includes(node.color) ? 'white' : 'black',
                 }}>
                   <div>
-                    <span>{node.title}</span>
+                    <span>{highlightText(node.title, filterText)}</span>
                   </div>
                 </div>
                 <span>
