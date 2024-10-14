@@ -295,13 +295,19 @@ const Tree = () => {
 
   const filterTree = useCallback((nodes, filterText) => {
     if (!filterText) return nodes;
-
+  
     const filteredNodes = [];
-
+  
     const filterRecursive = (node, parentPath = []) => {
       const newNode = { ...node, children: [] };
       let match = node.title.toLowerCase().includes(filterText.toLowerCase());
-
+  
+      if (match) {
+        // Se il nodo corrisponde, includi tutti i suoi figli senza ulteriori controlli
+        newNode.children = node.children ? [...node.children] : [];
+        return newNode;
+      }
+  
       if (node.children) {
         for (const child of node.children) {
           const filteredChild = filterRecursive(child, [...parentPath, newNode]);
@@ -311,23 +317,23 @@ const Tree = () => {
           }
         }
       }
-
+  
       if (match) {
         return newNode;
       }
       return null;
     };
-
+  
     for (const node of nodes) {
       const filteredNode = filterRecursive(node);
       if (filteredNode) {
         filteredNodes.push(filteredNode);
       }
     }
-
+  
     return filteredNodes;
   }, []);
-
+  
   function highlightText(text, filter) {
     const parts = text.split(new RegExp(`(${filter})`, 'gi'));
     return (
@@ -507,6 +513,15 @@ const Tree = () => {
       showSnackbar("Rimuovi il colore dal nodo prima di applicarne uno nuovo");
       return;
     }
+    if ((rootNode.color === 'green' || rootNode.color === 'lightgreen') && (strongColor === 'blue' || strongColor === 'goldenrod')) {
+      showSnackbar("Rimuovi il colore dal nodo prima di applicarne uno nuovo");
+      return;
+    }
+    if ((rootNode.color === 'goldenrod' || rootNode.color === 'lightgoldenrod') && (strongColor === 'green' || strongColor === 'blue')) {
+      showSnackbar("Rimuovi il colore dal nodo prima di applicarne uno nuovo");
+      return;
+    }
+
     if (rootNode) {
       // Se il nodo ha già il colore selezionato, rimuovi il colore e applica la logica di colore secondario
       if (rootNode.color === strongColor) {
@@ -537,14 +552,9 @@ const Tree = () => {
           applyWeakColorToChildren(rootNode, weakColor, strongColors);
         }
 
-        // Espandi tutti gli antenati del nodo cliccato
-        expandPathNodes(nodeId);
-
         // Aggiorna lo stato dell'albero per riflettere i cambiamenti
         setTreeData([...treeData]);
 
-        // Espandi tutti gli antenati del nodo cliccato
-        expandPathNodes(nodeId);
       }
     }
   }
@@ -809,25 +819,37 @@ const Tree = () => {
     setTreeData(expandNode(treeData, nodeId));
   };
 
-  const expandPathNodes = useCallback((treeData, path) => {
-    const expandNodes = (nodes, currentPath) => {
-      if (!Array.isArray(nodes)) {
-        return []; // Inizializza nodes come array vuoto se non è un array
-      }
-  
-      return nodes.map((node, index) => {
-        const newPath = currentPath.concat(index);
-        if (path.length > newPath.length && path[newPath.length - 1] === index) {
-          return {
-            ...node,
-            expanded: true,
-            children: node.children ? expandNodes(node.children, newPath) : [],
-          };
+  const expandPathNodes = useCallback((nodes, targetId) => {
+    const expandRecursive = (currentNodes) => {
+      return currentNodes.map(node => {
+        if (node.id === targetId) {
+          return { ...node, expanded: true };
+        }
+        if (node.children) {
+          const newChildren = expandRecursive(node.children);
+          if (newChildren.some(child => child.expanded || child.id === targetId)) {
+            return { ...node, expanded: true, children: newChildren };
+          }
         }
         return node;
       });
     };
-    return expandNodes(treeData, []);
+    
+    return expandRecursive(nodes);
+  }, []);
+
+  const findNodeAndPath = useCallback((nodes, targetId, path = []) => {
+    for (let i = 0; i < nodes.length; i++) {
+      const currentPath = [...path, i];
+      if (nodes[i].id === targetId) {
+        return { node: nodes[i], path: currentPath };
+      }
+      if (nodes[i].children) {
+        const result = findNodeAndPath(nodes[i].children, targetId, currentPath);
+        if (result) return result;
+      }
+    }
+    return null;
   }, []);
 
 
@@ -855,26 +877,33 @@ const Tree = () => {
   }, []);
 
   const handleSearchChange = useCallback((event, value) => {
-    setSearchValue(value);
-    HandleCloseAllNodesFiltered();
-    HandleCloseAllNodes();
+  
+  setSearchValue(value);
+  
+  if (value === null) {
+    setHighlightedNodeId(null);
+    return;
+  }
+  
+  setHighlightedNodeId(value.id);
+  
+  const currentTreeData = filterText ? filteredTreeData : treeData;
+  const foundNodeAndPath = findNodeAndPath(currentTreeData, value.id);
+  
+  if (foundNodeAndPath) {
+    const expandedTreeData = expandPathNodes(currentTreeData, value.id);
+    
+    if (filterText) {
+      setFilteredTreeData(expandedTreeData);
+    } else {
+      setTreeData(expandedTreeData);
+    }
+    
     setTimeout(() => {
-      if (value === null) {
-        setHighlightedNodeId(null);
-      } else {
-        setHighlightedNodeId(value.id);
-
-        if (value.path) {
-          const newTreeData = expandPathNodes(treeData, value.path);
-          setTreeData(newTreeData);
-          setTimeout(() => {
-            scrollToNode(value.id);
-          }, 100);
-        }
-      }
+      scrollToNode(value.id);
     }, 100);
-  }, [treeData, expandPathNodes, scrollToNode, HandleCloseAllNodesFiltered, HandleCloseAllNodes]);
-
+  }
+}, [treeData, filteredTreeData, filterText, expandPathNodes, findNodeAndPath, scrollToNode]);
 
   // Gestire l'evento di click sulla foreign key
   const handleForeignKeyClick = (nodeId, foreignParentId) => {
@@ -1106,7 +1135,15 @@ const Tree = () => {
                 getOptionLabel={(option) => option.title}
                 className={classes.searchBar}
                 value={searchValue}
-                onChange={handleSearchChange}
+                onChange={(event, value) => {
+                  if (value === null) {
+                    // Esegui la funzione desiderata quando si preme la "x"
+                    handleCloseAllNodesClick();
+                  } else {
+                    // Gestisci il cambiamento di valore normalmente
+                    handleSearchChange(event, value);
+                  }
+                }}
                 renderInput={(params) => 
                   <TextField
                   {...params}
@@ -1117,10 +1154,10 @@ const Tree = () => {
               />
             </div>
             {/* Remove All Colors e Close all nodes qui */}
-            <Button variant="contained" color="secondary" className={classes.button} onClick={handleRemoveAllColors}>
+            <Button variant="contained" color="error" className={classes.button} onClick={handleRemoveAllColors}>
               Remove All Colors
             </Button>
-            <Button variant="contained" color="secondary" className={classes.button} onClick={handleCloseAllNodesClick}>
+            <Button variant="contained" color="warning" className={classes.button} onClick={handleCloseAllNodesClick}>
               Close All Nodes
             </Button>
         </div>
