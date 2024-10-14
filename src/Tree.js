@@ -292,6 +292,7 @@ const Tree = () => {
   const [searchValue, setSearchValue] = useState(null);
   const [filterHistory, setFilterHistory] = useState([]);
   const [isTextFieldFocused, setIsTextFieldFocused] = useState(false);
+  const [expandedNodeIds, setExpandedNodeIds] = useState(new Set());
 
   const filterTree = useCallback((nodes, filterText) => {
     if (!filterText) return nodes;
@@ -498,9 +499,7 @@ const Tree = () => {
     return null;
   }
 
-  // Aggiungi questa funzione nel componente React che gestisce l'albero
   function handleColorButtonClick(nodeId, strongColor) {
-
 
     const weakColor = strongColor === 'goldenrod' ? 'palegoldenrod' : '#99D79E';
     const strongColors = ['goldenrod', 'green', 'blue']; // Colori che non devono essere sovrascritti
@@ -521,6 +520,14 @@ const Tree = () => {
       showSnackbar("Rimuovi il colore dal nodo prima di applicarne uno nuovo");
       return;
     }
+
+    const applyExpansionState = (nodes) => {
+      return nodes.map(node => ({
+        ...node,
+        expanded: expandedNodeIds.has(node.id),
+        children: node.children ? applyExpansionState(node.children) : [],
+      }));
+    };
 
     if (rootNode) {
       // Se il nodo ha già il colore selezionato, rimuovi il colore e applica la logica di colore secondario
@@ -553,7 +560,8 @@ const Tree = () => {
         }
 
         // Aggiorna lo stato dell'albero per riflettere i cambiamenti
-        setTreeData([...treeData]);
+        const updatedTreeData = applyExpansionState(treeData);
+        setTreeData([...updatedTreeData]);
 
       }
     }
@@ -768,6 +776,7 @@ const Tree = () => {
       }));
     };
     setTreeData(closeNodes(treeData));
+    setExpandedNodeIds(new Set());
   }, [treeData]);
 
   const handleCloseAllNodesClick = () => {
@@ -776,19 +785,15 @@ const Tree = () => {
   };
 
   const handleNodeExpand = (nodeId) => {
+    setExpandedNodeIds(prev => new Set(prev).add(nodeId));
+    
     const expandNode = (nodes, id) => {
       return nodes.map(node => {
         if (node.id === id) {
-          return {
-            ...node,
-            expanded: true,
-          };
+          return { ...node, expanded: true };
         }
         if (node.children) {
-          return {
-            ...node,
-            children: expandNode(node.children, id),
-          };
+          return { ...node, children: expandNode(node.children, id) };
         }
         return node;
       });
@@ -798,36 +803,40 @@ const Tree = () => {
   };
 
   const handleNodeClose = (nodeId) => {
-    const expandNode = (nodes, id) => {
+    setExpandedNodeIds(prev => {
+      const newSet = new Set(prev);
+      newSet.delete(nodeId);
+      return newSet;
+    });
+    
+    const closeNode = (nodes, id) => {
       return nodes.map(node => {
         if (node.id === id) {
-          return {
-            ...node,
-            expanded: false,
-          };
+          return { ...node, expanded: false };
         }
         if (node.children) {
-          return {
-            ...node,
-            children: expandNode(node.children, id),
-          };
+          return { ...node, children: closeNode(node.children, id) };
         }
         return node;
       });
     };
   
-    setTreeData(expandNode(treeData, nodeId));
+    setTreeData(closeNode(treeData, nodeId));
   };
 
   const expandPathNodes = useCallback((nodes, targetId) => {
+    const newExpandedNodeIds = new Set(expandedNodeIds);
+  
     const expandRecursive = (currentNodes) => {
       return currentNodes.map(node => {
         if (node.id === targetId) {
+          newExpandedNodeIds.add(node.id);
           return { ...node, expanded: true };
         }
         if (node.children) {
           const newChildren = expandRecursive(node.children);
           if (newChildren.some(child => child.expanded || child.id === targetId)) {
+            newExpandedNodeIds.add(node.id);
             return { ...node, expanded: true, children: newChildren };
           }
         }
@@ -835,8 +844,10 @@ const Tree = () => {
       });
     };
     
-    return expandRecursive(nodes);
-  }, []);
+    const result = expandRecursive(nodes);
+    setExpandedNodeIds(newExpandedNodeIds);
+    return result;
+  }, [expandedNodeIds]);
 
   const findNodeAndPath = useCallback((nodes, targetId, path = []) => {
     for (let i = 0; i < nodes.length; i++) {
@@ -1139,6 +1150,7 @@ const Tree = () => {
                   if (value === null) {
                     // Esegui la funzione desiderata quando si preme la "x"
                     handleCloseAllNodesClick();
+                    setSearchValue(null); // Aggiorna lo stato a null per resettare il campo di ricerca
                   } else {
                     // Gestisci il cambiamento di valore normalmente
                     handleSearchChange(event, value);
