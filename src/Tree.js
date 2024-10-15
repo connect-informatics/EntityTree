@@ -166,10 +166,20 @@ const Legend = () => {
       </div>
       <div>
         <span className={`${classes.legendDot} ${classes.greenDot}`}></span>
-        <Typography component="span" className={classes.legendText}>Facts</Typography>
+        <Typography component="span" className={classes.legendText}>Fact</Typography>
       </div>
     </div>
   );
+};
+
+const colorToEntityType = {
+  blue: 'config',
+  'lightblue': 'config', // Colore debole associato
+  goldenrod: 'log',
+  'lightgoldenrod': 'log', // Colore debole associato
+  green: 'fact',
+  'lightgreen': 'fact', // Colore debole associato
+  // Aggiungi altri colori e tipi di entità se necessario
 };
 
 function transformData(data, parentId = null) {
@@ -250,6 +260,8 @@ function revertTransformData(transformedData, verifiedNodeIds = new Set()) {
       name: item.title,
       id: item.id,
       ...(item.color && { color: item.color }), // Includi la proprietà color se esiste
+      verified: verifiedNodeIds.has(item.id), // Aggiungi l'informazione di verifica
+      entityType: colorToEntityType[item.color] || 'unknown', // Aggiungi il tipo di entità
       children: item.children && item.children.length > 0 ? revertTransformData(item.children, verifiedNodeIds) : undefined,
       foreign_keys: item.foreignKeys ? item.foreignKeys.map(fk => ({
         ParentNameEntity: fk.parentName,
@@ -258,8 +270,6 @@ function revertTransformData(transformedData, verifiedNodeIds = new Set()) {
         isNullable: fk.isNullable ? 'true' : 'false', // Converti booleano in stringa
         OrdinalPosition: fk.ordinal, // Include OrdinalPosition
       })) : [],
-      hidden: item.hidden,
-      verified: verifiedNodeIds.has(item.id) // Aggiungi l'informazione di verifica
     };
     return originalItem;
   });
@@ -536,7 +546,7 @@ const Tree = () => {
 
   function handleColorButtonClick(nodeId, strongColor) {
 
-    const weakColor = strongColor === 'goldenrod' ? 'palegoldenrod' : '#99D79E';
+    const weakColor = strongColor === 'goldenrod' ? 'palegoldenrod' : 'lightgreen';
     const strongColors = ['goldenrod', 'green', 'blue']; // Colori che non devono essere sovrascritti
 
     // Trova il nodo corrispondente all'ID e applica il colore debole ai suoi figli
@@ -547,11 +557,11 @@ const Tree = () => {
       showSnackbar("Rimuovi il colore dal nodo prima di applicarne uno nuovo");
       return;
     }
-    if ((rootNode.color === 'green' || rootNode.color === 'lightgreen') && (strongColor === 'blue' || strongColor === 'goldenrod')) {
+    if ((rootNode.color === 'green') && (strongColor === 'blue' || strongColor === 'goldenrod')) {
       showSnackbar("Rimuovi il colore dal nodo prima di applicarne uno nuovo");
       return;
     }
-    if ((rootNode.color === 'goldenrod' || rootNode.color === 'lightgoldenrod') && (strongColor === 'green' || strongColor === 'blue')) {
+    if ((rootNode.color === 'goldenrod') && (strongColor === 'green' || strongColor === 'blue')) {
       showSnackbar("Rimuovi il colore dal nodo prima di applicarne uno nuovo");
       return;
     }
@@ -722,11 +732,11 @@ const Tree = () => {
   function determineSecondaryColor(nodeId) {
     const parentNode = findParentNodeById(treeData, nodeId);
     const strongColors = ['goldenrod', 'green']; // Colori forti
-    const weakColors = ['palegoldenrod', '#99D79E'];
+    const weakColors = ['palegoldenrod', 'lightgreen'];
 
     const weakColorMapping = { // Mappatura da colore forte a colore debole
       'goldenrod': 'palegoldenrod',
-      'green': '#99D79E'
+      'green': 'lightgreen'
     };
 
     if (parentNode.color !== 'blue' || parentNode.color !== 'lightblue') {
