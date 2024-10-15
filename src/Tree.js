@@ -118,7 +118,6 @@ const useStyles = makeStyles((theme) => ({
     marginBottom: '0px',
     marginTop: '0px',
     flexWrap: 'wrap',
-    marginRight: '20px',
     alignSelf: 'center', // Assicurati che la leggenda sia allineata verticalmente al centro
     [theme.breakpoints.down('sm')]: {
       width: '90%', // Adatta la larghezza su dispositivi mobili
