@@ -16,6 +16,7 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import MenuItem from '@mui/material/MenuItem';
 import DeleteIcon from '@material-ui/icons/Delete';
+import CheckIcon from '@mui/icons-material/Check';
 
 
 const useStyles = makeStyles((theme) => ({
@@ -165,7 +166,7 @@ const Legend = () => {
       </div>
       <div>
         <span className={`${classes.legendDot} ${classes.greenDot}`}></span>
-        <Typography component="span" className={classes.legendText}>Fatti</Typography>
+        <Typography component="span" className={classes.legendText}>Facts</Typography>
       </div>
     </div>
   );
@@ -184,7 +185,6 @@ function transformData(data, parentId = null) {
         children: item.children ? transformData(Object.values(item.children), item.id) : [],
         expanded: false,
         highlighted: false,
-        hidden: item.hidden || false,
         foreignKeys: Array.isArray(item.foreign_keys) ? item.foreign_keys.map(fk => ({
           parentName: fk.ParentNameEntity,
           parentId: fk.ParentId_Entity.toString(), // Converte in stringa
@@ -204,7 +204,6 @@ function transformData(data, parentId = null) {
       children: data.children ? transformData(Object.values(data.children), data.id) : [],
       expanded: false,
       highlighted: false,
-      hidden: data.hidden || false,
       foreignKeys: Array.isArray(data.foreign_keys) ? data.foreign_keys.map(fk => ({
         parentName: fk.ParentNameEntity,
         parentId: fk.ParentId_Entity.toString(), // Converte in stringa
@@ -245,13 +244,13 @@ function transformData(data, parentId = null) {
   return sortNodesByDescendants(result);
 }
 
-function revertTransformData(transformedData) {
+function revertTransformData(transformedData, verifiedNodeIds = new Set()) {
   return transformedData.map(item => {
     const originalItem = {
       name: item.title,
       id: item.id,
       ...(item.color && { color: item.color }), // Includi la proprietà color se esiste
-      children: item.children && item.children.length > 0 ? revertTransformData(item.children) : undefined,
+      children: item.children && item.children.length > 0 ? revertTransformData(item.children, verifiedNodeIds) : undefined,
       foreign_keys: item.foreignKeys ? item.foreignKeys.map(fk => ({
         ParentNameEntity: fk.parentName,
         ParentId_Entity: parseInt(fk.parentId, 10), // Converte la stringa in un numero
@@ -259,8 +258,8 @@ function revertTransformData(transformedData) {
         isNullable: fk.isNullable ? 'true' : 'false', // Converti booleano in stringa
         OrdinalPosition: fk.ordinal, // Include OrdinalPosition
       })) : [],
-      hidden: item.hidden
-
+      hidden: item.hidden,
+      verified: verifiedNodeIds.has(item.id) // Aggiungi l'informazione di verifica
     };
     return originalItem;
   });
@@ -293,6 +292,39 @@ const Tree = () => {
   const [filterHistory, setFilterHistory] = useState([]);
   const [isTextFieldFocused, setIsTextFieldFocused] = useState(false);
   const [expandedNodeIds, setExpandedNodeIds] = useState(new Set());
+  const [verifiedNodeIds, setVerifiedNodeIds] = useState(new Set());
+  const [hideVerifiedNodes, setHideVerifiedNodes] = useState(false);
+
+  const handleVerifyNode = (nodeId) => {
+    setVerifiedNodeIds((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(nodeId)) {
+        newSet.delete(nodeId);
+      } else {
+        newSet.add(nodeId);
+      }
+      return newSet;
+    });
+  };
+
+  const toggleHideVerifiedNodes = () => {
+    setHideVerifiedNodes((prev) => !prev);
+  };
+
+  const getFilteredTreeData = useCallback(() => {
+    if (!hideVerifiedNodes) {
+      return filteredTreeData;
+    }
+    const filterVerifiedNodes = (nodes) => {
+      return nodes
+        .filter((node) => !verifiedNodeIds.has(node.id))
+        .map((node) => ({
+          ...node,
+          children: filterVerifiedNodes(node.children || []),
+        }));
+    };
+    return filterVerifiedNodes(filteredTreeData);
+  }, [filteredTreeData, hideVerifiedNodes, verifiedNodeIds]);
 
   const filterTree = useCallback((nodes, filterText) => {
     if (!filterText) return nodes;
@@ -434,6 +466,9 @@ const Tree = () => {
 
   const exportToJson = () => {
     const userName = prompt('Inserisci il tuo nome utente:');
+    if (userName === null) {
+      return;
+    }
     const now = new Date();
     const year = now.getFullYear();
     const month = String(now.getMonth() + 1).padStart(2, '0');
@@ -441,7 +476,7 @@ const Tree = () => {
     const hours = String(now.getHours()).padStart(2, '0');
     const minutes = String(now.getMinutes()).padStart(2, '0');
     const fileName = `${userName}_${year}.${month}.${day}_${hours}.${minutes}.json`;
-    const originalFormatData = revertTransformData(treeData);
+    const originalFormatData = revertTransformData(treeData, verifiedNodeIds);
     const jsonString = JSON.stringify(originalFormatData, null, 2);
     const blob = new Blob([jsonString], { type: "application/json" });
     const href = URL.createObjectURL(blob);
@@ -1103,11 +1138,14 @@ const Tree = () => {
             />
             <label htmlFor="contained-button-file">
               <Button variant="contained" color="primary" component="span" className={classes.button} >
-                Import
+                Upload
               </Button>
             </label>
             <Button variant="contained" color="primary" className={classes.button} onClick={exportToJson}>
-              Export
+              Download
+            </Button>
+            <Button variant="contained" color="secondary" onClick={toggleHideVerifiedNodes}>
+              {hideVerifiedNodes ? 'Show Nodes ✔' : 'Hide Nodes ✔'}
             </Button>
             <Typography variant="contained" className={classes.title}>
               EntityTree
@@ -1116,12 +1154,13 @@ const Tree = () => {
             <div style={{ position: 'relative' }}>
               <TextField
                 variant="outlined"
-                label="Filtra nodi"
+                label="Filter Nodes"
                 value={filterText}
                 onChange={handleFilterTextChange}
                 onFocus={handleFilterFocus}
                 onBlur={handleFilterBlur}
                 className={classes.searchBar}
+                style={{ width: '300px' }}
                 slotProps={{
                   endAdornment: (
                     <InputAdornment position="end">
@@ -1139,7 +1178,7 @@ const Tree = () => {
                 isVisible={isTextFieldFocused}
               />
             </div>
-            <div style={{ display: 'flex', justifyContent: 'center' }}>
+            <div style={{ display: 'flex', justifyContent: 'center',  width: '400px' }}>
               {/* Box di ricerca qui */}
               <Autocomplete
                 options={searchOptions}
@@ -1159,7 +1198,7 @@ const Tree = () => {
                 renderInput={(params) => 
                   <TextField
                   {...params}
-                  label="Cerca nodi"
+                  label="Search Nodes"
                   variant="outlined" 
                   />}
                 style={{ display: 'flex', justifyContent: 'center' }}
@@ -1182,14 +1221,13 @@ const Tree = () => {
       <div ref={treeContainerRef} className={classes.treeContainer} >
         <SortableTree
           isVirtualized={false}
-          treeData={filteredTreeData}
+          treeData={getFilteredTreeData()}
           onChange={handleTreeChange}
           onVisibilityToggle={handleVisibilityToggle}
           canDrag={false}
           generateNodeProps={({ node, path }) => ({
             'data-node-id': node.id, // Aggiungi un attributo data per identificare il nodo
             style: {
-              display: node.hidden ? 'none' : 'block',
               boxShadow: node.id === highlightedNodeId ? '0px 0px 15px 10px rgba(100,245,180, 0.95)' : '',
               borderRadius: '10px', // Aggiunta per arrotondare gli angoli,
             },
@@ -1226,6 +1264,15 @@ const Tree = () => {
                       )}
                     </IconButton>
                   )}
+                  <IconButton style={{ padding: 0, marginLeft: '-25px', marginRight: '5px' }} onClick={() => handleVerifyNode(node.id)}>
+                  <CheckIcon style={{
+                    color: verifiedNodeIds.has(node.id) ? 'white' : 'gray',
+                    backgroundColor: verifiedNodeIds.has(node.id) ? 'green' : 'transparent',
+                    borderRadius: '50%',
+                    border: verifiedNodeIds.has(node.id) ? '2px solid green' : '2px solid gray',
+                    padding: '2px',
+                  }} />
+                  </IconButton>
                   <IconButton style={{ padding: 0 }} onClick={(event) => { event.stopPropagation(); handleColorButtonClick(node.id, 'blue'); }}>
                     <LensIcon style={{ color: 'blue' }} />
                   </IconButton>
