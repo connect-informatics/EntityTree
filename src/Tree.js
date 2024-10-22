@@ -1275,10 +1275,10 @@ const Tree = () => {
                   )}
                   <IconButton style={{ padding: 0, marginLeft: '-25px', marginRight: '5px' }} onClick={() => handleVerifyNode(node.id)}>
                   <CheckIcon style={{
-                    color: verifiedNodeIds.has(node.id) ? 'white' : 'gray',
-                    backgroundColor: verifiedNodeIds.has(node.id) ? 'green' : 'transparent',
+                    color: verifiedNodeIds.has(node.id) ? 'DarkSlateGray' : 'gray',
+                    backgroundColor: verifiedNodeIds.has(node.id) ? 'Lime' : 'transparent',
                     borderRadius: '50%',
-                    border: verifiedNodeIds.has(node.id) ? '2px solid green' : '2px solid gray',
+                    border: verifiedNodeIds.has(node.id) ? '2px solid DarkSlateGray' : '2px solid gray',
                     padding: '2px',
                   }} />
                   </IconButton>
