@@ -1,6 +1,6 @@
 {
-  "short_name": "React App",
-  "name": "Create React App Sample",
+  "short_name": "Entity Tree",
+  "name": "Entity Tree Validator",
   "icons": [
     {
       "src": "favicon.ico",
