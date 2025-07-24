@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+
+
 import TextField from '@mui/material/TextField';
 import Autocomplete from '@mui/material/Autocomplete';
 import SortableTree from '@nosferatu500/react-sortable-tree';
@@ -909,27 +911,14 @@ const Tree = () => {
 
 
   const scrollToNode = useCallback((nodeId) => {
-    const scrollStep = 100; // Altezza in pixel per ogni scroll
-    const scrollInterval = 100; // Intervallo di tempo in millisecondi tra ogni scroll
-  
-    const scrollContainer = treeContainerRef.current;
-  
-    if (scrollContainer) {
-      const intervalId = setInterval(() => {
-        const nodeElement = scrollContainer.querySelector(`[data-node-id="${nodeId}"]`);
-        if (nodeElement) {
-          nodeElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          clearInterval(intervalId);
-        } else {
-          scrollContainer.scrollBy(0, scrollStep);
-          // Verifica se è stato raggiunto il fondo del contenitore
-          if (scrollContainer.scrollTop + scrollContainer.clientHeight >= scrollContainer.scrollHeight) {
-            clearInterval(intervalId);
-          }
-        }
-      }, scrollInterval);
-    }
-  }, []);
+  const nodeElement = nodeRefs.current[nodeId];
+  if (nodeElement) {
+    nodeElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  } else {
+    console.warn('Node not found', nodeId);
+  }
+}, []);
+.
 
   const handleSearchChange = useCallback((event, value) => {
   
@@ -982,6 +971,7 @@ const Tree = () => {
     // Trova il genitore del nodo corrente e rimuovi il nodo corrente dai suoi figli
     const removeNodeFromParent = (treeData, nodeId) => {
       const findAndRemoveNode = (nodes, nodeId) => {
+ 
         return nodes.map(node => {
           if (node.children) {
             const filteredChildren = node.children.filter(child => child.id !== nodeId);
