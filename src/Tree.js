@@ -911,25 +911,29 @@ const Tree = () => {
 
 
   const scrollToNode = useCallback((nodeId) => {
-    const scrollContainer = treeContainerRef.current;
-    if (!scrollContainer) return;
+    // Individua il contenitore scrollabile corretto (react-sortable-tree usa un wrapper interno)
+    const baseContainer = treeContainerRef.current;
+    // Se esiste, prova prima il contenitore virtuale interno
+    const scrollContainer =
+      baseContainer?.querySelector('.rst__virtualScrollOverride') ?? baseContainer;
+    const nodeElement = nodeRefs.current[nodeId];
 
-    const scrollStep = 100;
-    const scrollInterval = 100;
-    const intervalId = setInterval(() => {
-      const nodeElement = nodeRefs.current[nodeId];
-      if (nodeElement) {
-        nodeElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        clearInterval(intervalId);
-      } else {
-        scrollContainer.scrollBy(0, scrollStep);
-        if (scrollContainer.scrollTop + scrollContainer.clientHeight >= scrollContainer.scrollHeight) {
-          clearInterval(intervalId);
-          console.warn('Node not found after scrolling', nodeId);
-        }
-      }
-    }, scrollInterval);
+    if (!scrollContainer || !nodeElement) {
+      console.warn('Node not found', nodeId);
+      return;
+    }
+
+    // Calcola l’offset verticale del nodo rispetto al contenitore
+    const containerTop = scrollContainer.getBoundingClientRect().top;
+    const nodeTop = nodeElement.getBoundingClientRect().top;
+    const offset = nodeTop - containerTop - scrollContainer.clientHeight / 2;
+
+    scrollContainer.scrollTo({
+      top: scrollContainer.scrollTop + offset,
+      behavior: 'smooth',
+    });
   }, []);
+
 
 
 
